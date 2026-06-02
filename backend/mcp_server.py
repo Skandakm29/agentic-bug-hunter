@@ -305,6 +305,6 @@ if __name__ == "__main__":
     print(f"  Port     : {os.environ.get('MCP_PORT', 8003)}")
     print(f"  LLM      : Groq / {GROQ_MODEL}")
     print(f"  RAG      : {'enabled' if rag_available else 'disabled'}")
-    print(f"  API Key  : {'set ✅' if os.environ.get('GROQ_API_KEY') else 'missing ❌'}")
+    print(f"  API Key  : {'set ' if os.environ.get('GROQ_API_KEY') else 'missing '}")
     print("=" * 50)
     mcp.run(transport="sse")
