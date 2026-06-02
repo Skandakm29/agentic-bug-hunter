@@ -21,7 +21,7 @@ export default function Home() {
       setOllamaOnline(ol.available)
     }
     check()
-    const timer = setInterval(check, 15000)
+    const timer = setInterval(check, 30000)
     return () => clearInterval(timer)
   }, [])
 

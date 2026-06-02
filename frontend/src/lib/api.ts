@@ -35,6 +35,7 @@ export async function analyzeCode(code: string): Promise<AnalyzeResponse> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code }),
+    signal: AbortSignal.timeout(30000), // 30s — Render may be waking up
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -45,7 +46,10 @@ export async function analyzeCode(code: string): Promise<AnalyzeResponse> {
 
 export async function getOllamaStatus(): Promise<OllamaStatus> {
   try {
-    const res = await fetch(`${API}/ollama/status`)
+    const res = await fetch(`${API}/ollama/status`, {
+      signal: AbortSignal.timeout(10000), // 10s timeout — don't wait forever
+    })
+    if (!res.ok) return { available: false, models: [] }
     return res.json()
   } catch {
     return { available: false, models: [] }
@@ -54,7 +58,9 @@ export async function getOllamaStatus(): Promise<OllamaStatus> {
 
 export async function healthCheck(): Promise<boolean> {
   try {
-    const res = await fetch(`${API}/health`)
+    const res = await fetch(`${API}/health`, {
+      signal: AbortSignal.timeout(10000),
+    })
     return res.ok
   } catch {
     return false
