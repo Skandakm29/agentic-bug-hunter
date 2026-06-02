@@ -1,0 +1,12 @@
+.header { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.left { display: flex; align-items: center; gap: 20px; }
+.logo { display: flex; align-items: center; gap: 8px; }
+.logoIcon { color: var(--accent-green); }
+.logoText { font-weight: 700; font-size: 15px; letter-spacing: -0.3px; color: var(--text-primary); }
+.tagline { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); border-left: 1px solid var(--border); padding-left: 16px; }
+.status { display: flex; align-items: center; gap: 16px; }
+.statusItem { display: flex; align-items: center; gap: 6px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.dotOnline { background: var(--accent-green); box-shadow: 0 0 6px var(--accent-green); }
+.dotOffline { background: var(--text-muted); }
+.statusLabel { font-size: 12px; font-family: var(--font-mono); color: var(--text-secondary); }
