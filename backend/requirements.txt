@@ -1,7 +1,8 @@
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-pydantic==2.9.2
-requests==2.32.3
-python-multipart==0.0.12
-groq==0.9.0
-fastmcp
+cat > ~/Desktop/agentic-bug-hunter/backend/requirements.txt << 'EOF'
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.6
+pydantic>=2.0.0
+requests>=2.32.0
+python-multipart>=0.0.12
+groq>=1.4.0
+EOF
