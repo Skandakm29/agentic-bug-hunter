@@ -17,7 +17,7 @@ app.add_middleware(
 
 # ── Groq ────────────────────────────────────
 groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY", ""))
-GROQ_MODEL  = "llama3-8b-8192"
+GROQ_MODEL = "llama-3.1-8b-instant"
 
 # ── Static Engine ────────────────────────────
 KNOWN_PREFIXES = ["get","set","read","write","pin","label","burst","execute",
