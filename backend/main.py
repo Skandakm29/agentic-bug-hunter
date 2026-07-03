@@ -220,11 +220,10 @@ def rules():
 # MUST be at the bottom — after app is created and all routes are registered
 # MCP server is available at /mcp/sse
 # Connect Claude Desktop or Cursor to: http://localhost:8000/mcp/sse
+# ── Mount MCP Server ──────────────────────────────────────────────────────────
 try:
     from mcp_server import mcp
-    mcp_app = mcp.http_app(path="/sse")
-    app.mount("/mcp", mcp_app)
-    app.router.lifespan_context = mcp_app.lifespan
-    print("✅ MCP server mounted at /mcp/sse")
+    app.mount("/mcp", mcp.http_app())
+    print("✅ MCP server mounted at /mcp")
 except Exception as e:
     print(f"⚠️  MCP server not mounted: {e}")
