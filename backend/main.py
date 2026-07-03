@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()  # load .env FIRST before anything else reads env vars
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -212,3 +215,16 @@ def rules():
         {"rule":"blocking_in_isr",         "confidence":0.85,"description":"Blocking delay in interrupt"},
         {"rule":"bit_clear_error",         "confidence":0.80,"description":"& mask should be & ~mask"},
     ]
+
+# ── Mount MCP Server ──────────────────────────────────────────────────────────
+# MUST be at the bottom — after app is created and all routes are registered
+# MCP server is available at /mcp/sse
+# Connect Claude Desktop or Cursor to: http://localhost:8000/mcp/sse
+try:
+    from mcp_server import mcp
+    mcp_app = mcp.http_app(path="/sse")
+    app.mount("/mcp", mcp_app)
+    app.router.lifespan_context = mcp_app.lifespan
+    print("✅ MCP server mounted at /mcp/sse")
+except Exception as e:
+    print(f"⚠️  MCP server not mounted: {e}")

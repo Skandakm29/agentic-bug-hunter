@@ -7,10 +7,12 @@ import requests
 from typing import Optional
 from fastmcp import FastMCP
 from groq import Groq
-
+from dotenv import load_dotenv
+load_dotenv()
 # ── Groq client ──────────────────────────────
-groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY", ""))
-GROQ_MODEL  = "llama3-8b-8192"
+# NOTE: no hardcoded fallback key — set GROQ_API_KEY in your environment.
+groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+GROQ_MODEL  = "llama-3.1-8b-instant"
 
 # ── Optional RAG setup ───────────────────────
 rag_available = False
@@ -38,9 +40,9 @@ try:
         rag_available = True
         print("✅ RAG index loaded")
     else:
-        print("⚠️  RAG storage not found — search_documents unavailable")
+        print("  RAG storage not found — search_documents unavailable")
 except Exception as e:
-    print(f"⚠️  RAG setup skipped: {e}")
+    print(f" RAG setup skipped: {e}")
 
 # ────────────────────────────────────────────
 # Static Analysis Engine
@@ -300,11 +302,16 @@ def search_documents(query: str) -> list:
     return [{"text": n.get_text(), "score": n.get_score()} for n in nodes]
 
 if __name__ == "__main__":
+    port = int(os.environ.get("MCP_PORT", 8003))
+
     print("=" * 50)
     print("  Agentic Bug Hunter — MCP Server")
-    print(f"  Port     : {os.environ.get('MCP_PORT', 8003)}")
+    print(f"  Port     : {port}")
     print(f"  LLM      : Groq / {GROQ_MODEL}")
     print(f"  RAG      : {'enabled' if rag_available else 'disabled'}")
     print(f"  API Key  : {'set ' if os.environ.get('GROQ_API_KEY') else 'missing '}")
     print("=" * 50)
-    mcp.run(transport="sse")
+
+    # Bind to the port from MCP_PORT (defaults to 8003), instead of FastMCP's
+    # default of 8000 — this is what was ignoring your env var before.
+    mcp.run(transport="sse", host="127.0.0.1", port=port)

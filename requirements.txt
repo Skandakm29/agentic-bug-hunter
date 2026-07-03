@@ -1,0 +1,4 @@
+ source /home/ubuntu/Desktop/agentic-bug-hunter/venv/bin/activate
+nano requirements.txt
+
+

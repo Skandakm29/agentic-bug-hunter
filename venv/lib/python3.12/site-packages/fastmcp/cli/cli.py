@@ -359,6 +359,21 @@ async def apps(
             help="Auto-reload the MCP server on file changes",
         ),
     ] = True,
+    host: Annotated[
+        str,
+        cyclopts.Parameter(
+            "--host",
+            help="Host to bind to",
+        ),
+    ] = "127.0.0.1",
+    log_panel: Annotated[
+        bool,
+        cyclopts.Parameter(
+            "--log-panel",
+            negative="--no-log-panel",
+            help="Log panel feature in FastMCP dev UI",
+        ),
+    ] = True,
 ) -> None:
     """Preview a FastMCPApp UI in the browser.
 
@@ -378,7 +393,14 @@ async def apps(
 
     from fastmcp.cli.apps_dev import run_dev_apps
 
-    await run_dev_apps(server_spec, mcp_port=mcp_port, dev_port=dev_port, reload=reload)
+    await run_dev_apps(
+        server_spec,
+        mcp_port=mcp_port,
+        dev_port=dev_port,
+        reload=reload,
+        host=host,
+        log_panel=log_panel,
+    )
 
 
 @app.command
@@ -705,6 +727,8 @@ async def run(
             inner_cmd.extend(["--log-level", final_log_level])
         if final_no_banner:
             inner_cmd.append("--no-banner")
+        if stateless:
+            inner_cmd.append("--stateless")
         # Add skip-env flag to prevent infinite recursion
         inner_cmd.append("--skip-env")
 

@@ -116,6 +116,8 @@ class AzureProvider(OAuthProxy):
         consent_csp_policy: str | None = None,
         forward_resource: bool = True,
         fallback_refresh_token_expiry_seconds: int | None = None,
+        fastmcp_access_token_expiry_seconds: int | None = None,
+        token_expiry_threshold_seconds: int = 0,
         base_authority: str = "login.microsoftonline.com",
         token_issuer: str | None = None,
         http_client: httpx.AsyncClient | None = None,
@@ -179,6 +181,17 @@ class AzureProvider(OAuthProxy):
                 is responsible for its lifecycle. When None (default), a fresh client is created per fetch.
             enable_cimd: Enable CIMD (Client ID Metadata Document) support for URL-based
                 client IDs (default True). Set to False to disable.
+            fallback_refresh_token_expiry_seconds: Lifetime for the FastMCP-issued
+                refresh token when the upstream provider omits `refresh_expires_in`
+                (e.g. Cognito, GitHub, many OIDC IdPs). Defaults to 1 year. The upstream
+                refresh remains the source of truth. See `OAuthProxy` for details.
+            fastmcp_access_token_expiry_seconds: Lifetime for the FastMCP-issued access
+                token, decoupling it from the upstream provider's `expires_in`. Defaults
+                to None (mirror the upstream lifetime). Set this for bridges whose
+                upstream issues short-lived access tokens that some MCP clients can't
+                refresh gracefully (e.g. `mcp-remote`). See `OAuthProxy` for details.
+            token_expiry_threshold_seconds: Number of seconds before actual expiry to
+                treat a token as expired, refreshing early to avoid races. Defaults to 0.
         """
         # Parse scopes if provided as string
         parsed_required_scopes = parse_scopes(required_scopes)
@@ -262,6 +275,8 @@ class AzureProvider(OAuthProxy):
             consent_csp_policy=consent_csp_policy,
             forward_resource=forward_resource,
             fallback_refresh_token_expiry_seconds=fallback_refresh_token_expiry_seconds,
+            fastmcp_access_token_expiry_seconds=fastmcp_access_token_expiry_seconds,
+            token_expiry_threshold_seconds=token_expiry_threshold_seconds,
             valid_scopes=parsed_required_scopes,
             enable_cimd=enable_cimd,
         )
@@ -427,6 +442,26 @@ class AzureProvider(OAuthProxy):
                 # Unprefixed custom API scope - prefix with identifier_uri
                 prefixed.append(f"{self.identifier_uri}/{scope}")
         return prefixed
+
+    def _translate_scopes_from_idp(self, scopes: list[str]) -> list[str]:
+        """Strip ``{identifier_uri}/`` from custom API scopes Azure echoes back.
+
+        Inverse of :meth:`_prefix_scopes_for_azure`. Azure echoes the prefixed
+        form (``api://{client_id}/read``) in its token response's ``scope``
+        field, while MCP clients request and recognize the short form
+        (``read``) — the same form advertised on
+        ``/.well-known/oauth-authorization-server`` via ``valid_scopes``. Without
+        this translation, strict clients compare requested vs. granted scopes
+        and surface a "permissions not granted" warning (e.g. ChatGPT) even
+        when nothing is actually wrong.
+
+        OIDC scopes (``openid``, ``profile``, ``email``, ``offline_access``) and
+        external resource URIs (Microsoft Graph, etc.) never carry the prefix,
+        so :meth:`str.removeprefix` is a no-op on them and they pass through
+        unchanged.
+        """
+        prefix = f"{self.identifier_uri}/"
+        return [s.removeprefix(prefix) for s in scopes]
 
     def _build_upstream_authorize_url(
         self, txn_id: str, transaction: dict[str, Any]
