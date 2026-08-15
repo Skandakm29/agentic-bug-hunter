@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import shutil
+import subprocess
 import tempfile
 import zipfile
 from collections import OrderedDict
@@ -62,6 +63,12 @@ class ScanRequest(BaseModel):
     )
 
 
+class GitHubScanRequest(BaseModel):
+    url: str = Field(description="GitHub repository URL to clone and scan.")
+    max_files: int = Field(default=2000, ge=1, le=20000)
+    extensions: Optional[List[str]] = Field(default=None)
+
+
 # ---------------------------------------------------------------------------
 # Cache helpers
 # ---------------------------------------------------------------------------
@@ -92,6 +99,82 @@ def _get(scan_id: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
+@router.post("/scan/github", response_model=RepositoryReport)
+def scan_github_repo(req: GitHubScanRequest) -> RepositoryReport:
+    """
+    Clone a public GitHub repository and scan it for bugs.
+
+    Accepts any public GitHub URL:
+      https://github.com/owner/repo
+      https://github.com/owner/repo.git
+
+    Clones with --depth=1 (shallow) so large repos clone fast.
+    The cloned repo is kept alive for source file viewing and
+    cleaned up automatically when evicted from the scan cache.
+    """
+    url = req.url.strip()
+
+    # Validate it's a GitHub URL
+    if not url.startswith("https://github.com/"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only public GitHub URLs are supported. "
+                   "Example: https://github.com/owner/repo"
+        )
+
+    # Remove trailing .git if present
+    if url.endswith(".git"):
+        url = url[:-4]
+
+    tmp = tempfile.mkdtemp(prefix="argus_github_")
+    logger.info("Cloning %s into %s", url, tmp)
+
+    try:
+        result = subprocess.run(
+            ["git", "clone", "--depth=1", url, tmp],
+            capture_output=True,
+            text=True,
+            timeout=120  # 2 minute timeout for large repos
+        )
+        if result.returncode != 0:
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to clone repository: {result.stderr[:300]}"
+            )
+    except subprocess.TimeoutExpired:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise HTTPException(
+            status_code=408,
+            detail="Clone timed out — repository may be too large or unavailable."
+        )
+    except Exception as exc:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Clone failed: {exc}"
+        ) from exc
+
+    # Collapse single root folder (GitHub zips wrap in owner-repo-branch/)
+    scan_root = _collapse_single_root(tmp)
+
+    try:
+        scanner = RepositoryScanner(
+            extensions=tuple(req.extensions) if req.extensions else None,
+            max_files=req.max_files,
+        )
+        report = scanner.scan(scan_root, source_label=url)
+    except Exception as exc:
+        shutil.rmtree(tmp, ignore_errors=True)
+        logger.error("Scan of %s failed: %s", url, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Scan failed: {exc}") from exc
+
+    # Keep cloned repo alive for source file viewing
+    # It will be cleaned up automatically when evicted from LRU cache
+    _remember(report, temp_root=tmp)
+    return report
+
+
 @router.post("/scan", response_model=RepositoryReport)
 def scan_local_path(req: ScanRequest) -> RepositoryReport:
     """Analyse a repository that already exists on this machine."""
@@ -112,7 +195,6 @@ def scan_local_path(req: ScanRequest) -> RepositoryReport:
         logger.error("Scan of %s failed: %s", path, exc, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Scan failed: {exc}") from exc
 
-    # The directory is the user's own; never delete it on eviction.
     _remember(report, temp_root=None)
     return report
 
@@ -148,8 +230,6 @@ async def scan_uploaded_archive(
         shutil.rmtree(extract_root, ignore_errors=True)
         raise HTTPException(status_code=400, detail=f"Could not extract archive: {exc}") from exc
 
-    # GitHub-style zips wrap everything in one top-level folder; scan that
-    # directly so reported paths are not prefixed with "repo-main/".
     scan_root = _collapse_single_root(extract_root)
 
     try:
@@ -161,8 +241,6 @@ async def scan_uploaded_archive(
         logger.error("Scan of upload %s failed: %s", filename, exc, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Scan failed: {exc}") from exc
 
-    # Keep the extracted tree alive so source can be viewed, and register it
-    # for cleanup when this scan is evicted.
     _remember(report, temp_root=extract_root)
     return report
 
@@ -198,9 +276,8 @@ def get_scan(scan_id: str) -> RepositoryReport:
 def get_source_file(scan_id: str, path: str = Query(...)) -> dict:
     """
     Return the source of one file from a scan, for the inline code view.
-
     The requested path is resolved against the scan root and rejected if it
-    escapes it, so a crafted `path` cannot read arbitrary files.
+    escapes it, so a crafted path cannot read arbitrary files.
     """
     entry = _get(scan_id)
     report: RepositoryReport = entry["report"]
@@ -431,10 +508,8 @@ def _to_html(report: RepositoryReport) -> str:
 
 def _safe_extract(archive: zipfile.ZipFile, dest: str) -> None:
     """
-    Extract *archive* into *dest*, rejecting entries that escape it.
-
-    Guards against zip-slip (``../`` members and absolute paths) and against
-    a zip bomb via a total-uncompressed-size cap.
+    Extract archive into dest, rejecting entries that escape it.
+    Guards against zip-slip and zip bombs.
     """
     dest_root = os.path.abspath(dest)
     total = 0
@@ -456,7 +531,7 @@ def _safe_extract(archive: zipfile.ZipFile, dest: str) -> None:
 
 
 def _collapse_single_root(path: str) -> str:
-    """If *path* contains exactly one directory and nothing else, descend."""
+    """If path contains exactly one directory and nothing else, descend."""
     try:
         entries = os.listdir(path)
     except OSError:
