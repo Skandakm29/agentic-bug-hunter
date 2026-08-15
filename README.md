@@ -705,4 +705,4 @@ BuildSystemRegistry.register("meson", MesonBuildSystem)
 
 MIT License — see `LICENSE` for details.
 
-# K Sai Sri Harsha(Author)
+# K M SKANDA AND K Sai Sri Harsha
