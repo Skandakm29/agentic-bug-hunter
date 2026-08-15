@@ -1,6 +1,0 @@
-fastmcp>=0.1.0
-requests>=2.31.0
-pandas>=2.0.0
-# Optional - only needed if using RAG with llama_index
-# llama-index>=0.10.0
-# llama-index-embeddings-huggingface>=0.2.0

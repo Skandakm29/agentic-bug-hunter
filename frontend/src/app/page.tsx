@@ -3,10 +3,15 @@ import { useState, useEffect, useCallback } from 'react'
 import Header from '../components/Header'
 import CodeEditor, { SAMPLE_CODE } from '../components/CodeEditor'
 import ResultsPanel from '../components/ResultsPanel'
+import RepoScanner from '../components/RepoScanner'
 import { analyzeCode, getOllamaStatus, healthCheck, type AnalyzeResponse } from '../lib/api'
 import styles from './page.module.css'
 
+type Tab = 'repository' | 'snippet'
+
 export default function Home() {
+  const [tab, setTab] = useState<Tab>('repository')
+
   const [code, setCode] = useState(SAMPLE_CODE)
   const [result, setResult] = useState<AnalyzeResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -21,7 +26,7 @@ export default function Home() {
       setOllamaOnline(ol.available)
     }
     check()
-    const timer = setInterval(check, 30000)
+    const timer = setInterval(check, 15000)
     return () => clearInterval(timer)
   }, [])
 
@@ -41,25 +46,47 @@ export default function Home() {
   return (
     <div className={styles.app}>
       <Header backendOnline={backendOnline} ollamaOnline={ollamaOnline} />
-      <main className={styles.main}>
-        <div className={styles.editorPane}>
-          <CodeEditor value={code} onChange={setCode} onAnalyze={handleAnalyze} loading={loading} />
-        </div>
-        <div className={styles.divider} />
-        <div className={styles.resultsPane}>
-          <div className={styles.paneHeader}>
-            <span>Analysis Results</span>
-            {result && (
-              <span className={styles.issueCount}>
-                {result.total_issues} issue{result.total_issues !== 1 ? 's' : ''}
-              </span>
-            )}
+
+      <div className={styles.tabs}>
+        <button
+          className={`${styles.tab} ${tab === 'repository' ? styles.tabActive : ''}`}
+          onClick={() => setTab('repository')}
+        >
+          Repository scan
+        </button>
+        <button
+          className={`${styles.tab} ${tab === 'snippet' ? styles.tabActive : ''}`}
+          onClick={() => setTab('snippet')}
+        >
+          Snippet analyzer
+        </button>
+      </div>
+
+      {tab === 'repository' ? (
+        <main className={styles.repoMain}>
+          <RepoScanner />
+        </main>
+      ) : (
+        <main className={styles.main}>
+          <div className={styles.editorPane}>
+            <CodeEditor value={code} onChange={setCode} onAnalyze={handleAnalyze} loading={loading} />
           </div>
-          <div className={styles.paneBody}>
-            <ResultsPanel result={result} error={error} loading={loading} />
+          <div className={styles.divider} />
+          <div className={styles.resultsPane}>
+            <div className={styles.paneHeader}>
+              <span>Analysis Results</span>
+              {result && (
+                <span className={styles.issueCount}>
+                  {result.total_issues} issue{result.total_issues !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            <div className={styles.paneBody}>
+              <ResultsPanel result={result} error={error} loading={loading} />
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
+      )}
     </div>
   )
 }
